@@ -1,30 +1,31 @@
 return {
   {
-    "catppuccin/nvim",
-    name = "catppuccin",
+    "github-main-user/lytmode.nvim",
+    lazy = false,
     priority = 1000,
-    opts = function()
-      return {
-        transparent_background = true,
-      }
+    config = function()
+      vim.cmd.colorscheme("lytmode")
     end,
   },
-
   {
-    "craftzdog/solarized-osaka.nvim",
-    lazy = true,
+    "scottmckendry/cyberdream.nvim",
+    lazy = false,
     priority = 1000,
-    opts = function()
-      return {
-        transparent = true,
-      }
-    end,
   },
-
   {
-    "LazyVim/LazyVim",
-    opts = {
-      colorscheme = "catppuccin",
-    },
+    "rebelot/kanagawa.nvim",
+    lazy = false,
+    priority = 1000,
+    -- config = function()
+    --   vim.cmd.colorscheme("kanagawa-dragon")
+    -- end,
+  },
+  {
+    "xero/miasma.nvim",
+    lazy = false,
+    priority = 1000,
+    -- config = function()
+    --   vim.cmd("colorscheme miasma")
+    -- end,
   },
 }
