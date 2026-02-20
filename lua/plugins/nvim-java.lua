@@ -1,76 +1,92 @@
 return {
-  "nvim-java/nvim-java",
-  ft = "java",
-  dependencies = { "neovim/nvim-lspconfig", "mfussenegger/nvim-jdtls" },
-  config = function()
-    local jdtls   = require("jdtls")
-    local jsetup  = require("jdtls.setup")
-    local lsputil = require("lspconfig.util")
-    -- pcall(function() require("java").setup({}) end)
+  {
+    "nvim-java/nvim-java",
+    enabled = false,
+  },
 
-    local markers = { "pom.xml", "build.gradle", "mvnw", "gradlew", ".git" }
-    local root    = jsetup.find_root(markers) or lsputil.root_pattern(unpack(markers))(vim.loop.cwd())
-    if not root or root == "" then return end
+  {
+    "mason-org/mason.nvim",
+    optional = true,
+    opts = function(_, opts)
+      opts.ensure_installed = opts.ensure_installed or {}
 
-    local parent = vim.fn.fnamemodify(root, ":h")
-    local wspath = vim.fn.stdpath("state") .. "/jdtls/workspace/" .. (vim.fn.fnamemodify(parent, ":t") .. "-jdtls")
+      for _, pkg in ipairs({ "jdtls", "java-debug-adapter", "java-test" }) do
+        if not vim.tbl_contains(opts.ensure_installed, pkg) then
+          table.insert(opts.ensure_installed, pkg)
+        end
+      end
+    end,
+  },
+  {
+    "mfussenegger/nvim-jdtls",
+    optional = true,
+    opts = function(_, opts)
+      local java8_home = "/Users/sabrina/Library/Java/JavaVirtualMachines/corretto-1.8.0_482/Contents/Home"
+      local java21_home = "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+      local jdtls_bin = vim.fn.stdpath("data") .. "/mason/bin/jdtls"
+      local lombok_jar = vim.fn.stdpath("data") .. "/mason/packages/jdtls/lombok.jar"
 
-    local mason = vim.fn.stdpath("data") .. "/mason/packages/jdtls"
-    local launcher = vim.fn.glob(mason .. "/plugins/org.eclipse.equinox.launcher_*.jar")
-    local cfg = mason .. "/config_mac" -- macOS
+      if vim.fn.filereadable(jdtls_bin) == 1 and vim.fn.filereadable(java21_home .. "/bin/java") == 1 then
+        opts.cmd = { jdtls_bin, "--java-executable", java21_home .. "/bin/java" }
 
-    local lombok = "/Users/rendyaldion/.m2/repository/org/projectlombok/lombok/1.18.30/lombok-1.18.30.jar"
+        if vim.fn.filereadable(lombok_jar) == 1 then
+          table.insert(opts.cmd, "--jvm-arg=-javaagent:" .. lombok_jar)
+          table.insert(opts.cmd, "--jvm-arg=-Xbootclasspath/a:" .. lombok_jar)
+        end
+      end
 
-    local cmd = {
-      "java",
-      "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-      "-Dosgi.bundles.defaultStartLevel=4",
-      "-Declipse.product=org.eclipse.jdt.ls.core.product",
-      "-Dlog.protocol=true",
-      "-Dlog.level=ALL",
-      "-Xms1g",
-      "--add-modules=ALL-SYSTEM",
-      "--add-opens", "java.base/java.util=ALL-UNNAMED",
-      "--add-opens", "java.base/java.lang=ALL-UNNAMED",
-      "-javaagent:" .. lombok,
-      "-Xbootclasspath/a:" .. lombok,
-      "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-      "-jar", launcher,
-      "-configuration", cfg,
-      "-data", wspath,
-    }
+      opts.root_dir = function(path)
+        return vim.fs.root(path, {
+          ".git",
+          ".project",
+          ".classpath",
+          "mvnw",
+          "gradlew",
+          "pom.xml",
+          "build.gradle",
+          "build.gradle.kts",
+          "settings.gradle",
+          "settings.gradle.kts",
+          "build.xml",
+        }) or vim.uv.cwd()
+      end
 
-    -- local style_uri = vim.uri_from_fname("/Users/rendyaldion/.idea/codeStyles/Java.xml")
+      local runtimes = {}
+      if vim.fn.filereadable(java8_home .. "/bin/java") == 1 then
+        table.insert(runtimes, { name = "JavaSE-1.8", path = java8_home, default = true })
+      end
+      if vim.fn.filereadable(java21_home .. "/bin/java") == 1 then
+        table.insert(runtimes, { name = "JavaSE-21", path = java21_home })
+      end
 
-    local settings = {
-      java = {
-        configuration = { updateBuildConfiguration = "automatic" },
-        maven = { downloadSources = true },
-        import = { maven = { enabled = true } },
-        contentProvider = { preferred = "fernflower" },
-        -- format = {
-        --   settings = {
-        --     url = style_uri,
-        --     profile = "Default",
-        --   },
-        -- },
-      },
-    }
+      local java_cfg = {
+        configuration = {
+          updateBuildConfiguration = "automatic",
+        },
+        maven = {
+          downloadSources = true,
+        },
+        import = {
+          maven = {
+            enabled = true,
+          },
+        },
+        contentProvider = {
+          preferred = "fernflower",
+        },
+        inlayHints = {
+          parameterNames = {
+            enabled = "all",
+          },
+        },
+      }
+      if #runtimes > 0 then
+        java_cfg.configuration.runtimes = runtimes
+      end
 
-    local function on_attach(client, _)
-      client.server_capabilities.documentFormattingProvider = false
-    end
-
-    vim.api.nvim_create_autocmd("FileType", {
-      pattern = "java",
-      callback = function()
-        jdtls.start_or_attach({
-          cmd = cmd,
-          root_dir = root,
-          settings = settings,
-          on_attach = on_attach,
-        })
-      end,
-    })
-  end,
+      opts.settings = vim.tbl_deep_extend("force", opts.settings or {}, {
+        java = java_cfg,
+      })
+    end,
+  },
 }
